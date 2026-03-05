@@ -1,0 +1,9 @@
+{
+  "name": "l-ra/lechtivity-app",
+  "description": "Losování úkolů z YAML souboru",
+  "type": "project",
+  "require": {
+    "php": ">=8.0",
+    "symfony/yaml": "^7.0"
+  }
+}
