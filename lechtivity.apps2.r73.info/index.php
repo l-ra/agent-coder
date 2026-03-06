@@ -103,17 +103,61 @@ $currentTask = $_SESSION['task'];
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Lechtivity – losování úkolů</title>
     <style>
-        body { font-family: system-ui, sans-serif; margin: 0; background: #111827; color: #f9fafb; }
-        .wrap { max-width: 720px; margin: 0 auto; padding: 20px; }
-        .card { background: #1f2937; border-radius: 16px; padding: 18px; margin-bottom: 16px; }
-        h1 { font-size: 1.5rem; margin-top: 0; }
-        h2 { margin-top: 0; }
-        button { background: #ec4899; color: #fff; border: 0; border-radius: 12px; padding: 10px 14px; font-weight: 700; cursor: pointer; }
+        * { box-sizing: border-box; }
+        body {
+            font-family: system-ui, sans-serif;
+            margin: 0;
+            background: #111827;
+            color: #f9fafb;
+            line-height: 1.45;
+        }
+        .wrap {
+            width: min(100%, 720px);
+            margin: 0 auto;
+            padding: clamp(12px, 3vw, 20px);
+        }
+        .card {
+            background: #1f2937;
+            border-radius: 16px;
+            padding: clamp(14px, 3vw, 18px);
+            margin-bottom: 16px;
+        }
+        h1 { font-size: clamp(1.35rem, 4.5vw, 1.75rem); margin-top: 0; margin-bottom: 10px; }
+        h2 { margin-top: 0; font-size: clamp(1.15rem, 4.2vw, 1.45rem); }
+        p { margin: 0 0 10px; }
+        hr { border: 0; border-top: 1px solid #374151; margin: 14px 0; }
+        button {
+            width: 100%;
+            min-height: 44px;
+            background: #ec4899;
+            color: #fff;
+            border: 0;
+            border-radius: 12px;
+            padding: 10px 14px;
+            font-weight: 700;
+            cursor: pointer;
+        }
         button.secondary { background: #374151; }
-        .actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
+        .actions {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 10px;
+            margin-top: 12px;
+        }
+        .actions form { margin: 0; }
         .muted { color: #9ca3af; }
-        .timer { font-size: 2rem; font-weight: 700; margin: 10px 0; }
+        .timer { font-size: clamp(1.8rem, 8vw, 2.4rem); font-weight: 700; margin: 10px 0; }
         .ok { color: #34d399; font-weight: 700; }
+
+        @media (min-width: 560px) {
+            button { width: auto; min-width: 140px; }
+            .actions {
+                display: flex;
+                gap: 10px;
+                flex-wrap: wrap;
+            }
+            .actions form button { width: auto; }
+        }
     </style>
 </head>
 <body>
