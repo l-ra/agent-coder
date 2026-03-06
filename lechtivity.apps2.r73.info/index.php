@@ -191,7 +191,7 @@ if ($currentUser && $currentProfile === null) {
 if ($action === 'logout') {
     $_SESSION['auth_user'] = null;
     $_SESSION['task'] = null;
-    header('Location: ' . $_SERVER['PHP_SELF']);
+    header('Location: ' . $_SERVER['PHP_SELF'] . '?logged_out=1');
     exit;
 }
 
@@ -553,6 +553,14 @@ unset($_SESSION['draw_message']);
 
         return res.json();
     };
+
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('logged_out') === '1') {
+        localStorage.removeItem('lechtivity_username');
+        localStorage.removeItem('lechtivity_password');
+        const cleanUrl = window.location.pathname;
+        window.history.replaceState({}, '', cleanUrl);
+    }
 
     const storedUsername = localStorage.getItem('lechtivity_username') || '';
     const storedPassword = localStorage.getItem('lechtivity_password') || '';
