@@ -61,33 +61,20 @@ function taskId(array $task, int $idx): string
     return 't_' . $idx . '_' . substr(sha1($name . '|' . $desc), 0, 12);
 }
 
-function profileBaseDir(string $domain): string
+function profileBaseDir(): string
 {
-    $candidates = [
-        '/working',
-        '/home/rasekl/deployments/multi-apache-php-working',
-        __DIR__ . '/working',
-    ];
-
-    foreach ($candidates as $base) {
-        if (is_dir($base) && is_writable($base)) {
-            return rtrim($base, '/');
-        }
-    }
-
-    // Last-resort fallback if no candidate exists yet.
-    return '/home/rasekl/deployments/multi-apache-php-working';
+    return '/working';
 }
 
 function profilePath(string $domain, string $username): string
 {
-    $base = profileBaseDir($domain);
+    $base = profileBaseDir();
     $domainSafe = preg_replace('/[^a-z0-9.-]+/i', '_', $domain) ?? 'unknown-domain';
     $userSafe = sanitizeUsername($username);
 
     $dir = $base . '/' . $domainSafe;
-    if (!is_dir($dir)) {
-        mkdir($dir, 0777, true);
+    if (!is_dir($dir) || !is_writable($dir)) {
+        throw new RuntimeException('Profilový adresář není dostupný: ' . $dir);
     }
 
     return $dir . '/' . $userSafe . '.json';
@@ -124,11 +111,15 @@ function saveProfile(string $domain, string $username, array $profile): void
     $profile['drawn'] = is_array($profile['drawn'] ?? null) ? $profile['drawn'] : [];
     $profile['updated_at'] = gmdate('c');
 
-    file_put_contents(
+    $written = @file_put_contents(
         $path,
         json_encode($profile, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
         LOCK_EX
     );
+
+    if ($written === false) {
+        throw new RuntimeException('Profil se nepodařilo uložit: ' . $path);
+    }
 }
 
 $domain = (string)($_SERVER['HTTP_HOST'] ?? 'localhost');
@@ -157,38 +148,42 @@ if (!isset($_SESSION['auth_user'])) {
 $action = $_POST['action'] ?? null;
 
 if ($action === 'api_auth') {
-    $username = trim((string)($_POST['username'] ?? ''));
-    $password = (string)($_POST['password'] ?? '');
+    try {
+        $username = trim((string)($_POST['username'] ?? ''));
+        $password = (string)($_POST['password'] ?? '');
 
-    if ($username === '' || $password === '') {
-        jsonResponse(['ok' => false, 'error' => 'Vyplň username i heslo.'], 400);
-    }
-
-    $profile = loadProfile($domain, $username);
-
-    if ($profile === null) {
-        $profile = [
-            'username' => $username,
-            'password_hash' => password_hash($password, PASSWORD_DEFAULT),
-            'ratings' => [],
-            'drawn' => [],
-            'created_at' => gmdate('c'),
-        ];
-        saveProfile($domain, $username, $profile);
-    } else {
-        $hash = (string)($profile['password_hash'] ?? '');
-        if ($hash === '' || !password_verify($password, $hash)) {
-            jsonResponse(['ok' => false, 'error' => 'Neplatné přihlašovací údaje.'], 401);
+        if ($username === '' || $password === '') {
+            jsonResponse(['ok' => false, 'error' => 'Vyplň username i heslo.'], 400);
         }
 
-        if (password_needs_rehash($hash, PASSWORD_DEFAULT)) {
-            $profile['password_hash'] = password_hash($password, PASSWORD_DEFAULT);
+        $profile = loadProfile($domain, $username);
+
+        if ($profile === null) {
+            $profile = [
+                'username' => $username,
+                'password_hash' => password_hash($password, PASSWORD_DEFAULT),
+                'ratings' => [],
+                'drawn' => [],
+                'created_at' => gmdate('c'),
+            ];
             saveProfile($domain, $username, $profile);
-        }
-    }
+        } else {
+            $hash = (string)($profile['password_hash'] ?? '');
+            if ($hash === '' || !password_verify($password, $hash)) {
+                jsonResponse(['ok' => false, 'error' => 'Neplatné přihlašovací údaje.'], 401);
+            }
 
-    $_SESSION['auth_user'] = $username;
-    jsonResponse(['ok' => true, 'username' => $username]);
+            if (password_needs_rehash($hash, PASSWORD_DEFAULT)) {
+                $profile['password_hash'] = password_hash($password, PASSWORD_DEFAULT);
+                saveProfile($domain, $username, $profile);
+            }
+        }
+
+        $_SESSION['auth_user'] = $username;
+        jsonResponse(['ok' => true, 'username' => $username]);
+    } catch (Throwable $e) {
+        jsonResponse(['ok' => false, 'error' => 'Profilové úložiště není dostupné.'], 500);
+    }
 }
 
 $currentUser = is_string($_SESSION['auth_user']) ? $_SESSION['auth_user'] : null;
@@ -249,9 +244,13 @@ if ($action === 'draw') {
     $_SESSION['counter'] = $repeat;
 
     $currentProfile['drawn'][$taskId] = true;
-    saveProfile($domain, $currentUser, $currentProfile);
+    try {
+        saveProfile($domain, $currentUser, $currentProfile);
+        $_SESSION['draw_message'] = null;
+    } catch (Throwable $e) {
+        $_SESSION['draw_message'] = 'Nepodařilo se uložit profil.';
+    }
 
-    $_SESSION['draw_message'] = null;
     header('Location: ' . $_SERVER['PHP_SELF']);
     exit;
 }
@@ -263,7 +262,11 @@ if ($action === 'rate_task' && is_array($_SESSION['task']) && $currentUser && is
         $tid = (string)($task['_task_id'] ?? '');
         if ($tid !== '') {
             $currentProfile['ratings'][$tid] = $vote;
-            saveProfile($domain, $currentUser, $currentProfile);
+            try {
+                saveProfile($domain, $currentUser, $currentProfile);
+            } catch (Throwable $e) {
+                $_SESSION['draw_message'] = 'Nepodařilo se uložit hodnocení.';
+            }
         }
     }
 
