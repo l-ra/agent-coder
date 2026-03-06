@@ -135,12 +135,6 @@ if (!is_array($tasks) || count($tasks) === 0) {
 if (!isset($_SESSION['task'])) {
     $_SESSION['task'] = null;
 }
-if (!isset($_SESSION['counter'])) {
-    $_SESSION['counter'] = null;
-}
-if (!isset($_SESSION['counter_done'])) {
-    $_SESSION['counter_done'] = false;
-}
 if (!isset($_SESSION['auth_user'])) {
     $_SESSION['auth_user'] = null;
 }
@@ -197,8 +191,6 @@ if ($currentUser && $currentProfile === null) {
 if ($action === 'logout') {
     $_SESSION['auth_user'] = null;
     $_SESSION['task'] = null;
-    $_SESSION['counter'] = null;
-    $_SESSION['counter_done'] = false;
     header('Location: ' . $_SERVER['PHP_SELF']);
     exit;
 }
@@ -226,8 +218,6 @@ if ($action === 'draw') {
 
     if (count($eligible) === 0) {
         $_SESSION['task'] = null;
-        $_SESSION['counter'] = null;
-        $_SESSION['counter_done'] = false;
         $_SESSION['draw_message'] = 'Žádná nová otázka k losování. Zaškrtni „včetně už zobrazených“. '; 
         header('Location: ' . $_SERVER['PHP_SELF']);
         exit;
@@ -238,10 +228,6 @@ if ($action === 'draw') {
     $taskId = (string)$task['_task_id'];
 
     $_SESSION['task'] = $task;
-    $_SESSION['counter_done'] = false;
-
-    $repeat = parseRepeatCount($task['pocet_opakovani'] ?? null);
-    $_SESSION['counter'] = $repeat;
 
     $currentProfile['drawn'][$taskId] = true;
     try {
@@ -255,44 +241,33 @@ if ($action === 'draw') {
     exit;
 }
 
-if ($action === 'rate_task' && is_array($_SESSION['task']) && $currentUser && is_array($currentProfile)) {
+if ($action === 'api_rate_task') {
+    if (!is_array($_SESSION['task']) || !$currentUser || !is_array($currentProfile)) {
+        jsonResponse(['ok' => false, 'error' => 'Nepřihlášený uživatel nebo chybějící úkol.'], 401);
+    }
+
     $vote = (string)($_POST['vote'] ?? '');
-    if (in_array($vote, ['like', 'dislike'], true)) {
-        $task = $_SESSION['task'];
-        $tid = (string)($task['_task_id'] ?? '');
-        if ($tid !== '') {
-            $currentProfile['ratings'][$tid] = $vote;
-            try {
-                saveProfile($domain, $currentUser, $currentProfile);
-            } catch (Throwable $e) {
-                $_SESSION['draw_message'] = 'Nepodařilo se uložit hodnocení.';
-            }
-        }
+    if (!in_array($vote, ['like', 'dislike'], true)) {
+        jsonResponse(['ok' => false, 'error' => 'Neplatné hodnocení.'], 400);
     }
 
-    header('Location: ' . $_SERVER['PHP_SELF']);
-    exit;
-}
-
-if ($action === 'counter_decrement' && is_array($_SESSION['task'])) {
-    if (is_int($_SESSION['counter']) && $_SESSION['counter'] > 0) {
-        $_SESSION['counter']--;
+    $task = $_SESSION['task'];
+    $tid = (string)($task['_task_id'] ?? '');
+    if ($tid === '') {
+        jsonResponse(['ok' => false, 'error' => 'Chybí identifikátor úkolu.'], 400);
     }
 
-    header('Location: ' . $_SERVER['PHP_SELF']);
-    exit;
-}
-
-if ($action === 'counter_done' && is_array($_SESSION['task'])) {
-    $_SESSION['counter_done'] = true;
-    header('Location: ' . $_SERVER['PHP_SELF']);
-    exit;
+    try {
+        $currentProfile['ratings'][$tid] = $vote;
+        saveProfile($domain, $currentUser, $currentProfile);
+        jsonResponse(['ok' => true, 'vote' => $vote]);
+    } catch (Throwable $e) {
+        jsonResponse(['ok' => false, 'error' => 'Nepodařilo se uložit hodnocení.'], 500);
+    }
 }
 
 if ($action === 'reset_task') {
     $_SESSION['task'] = null;
-    $_SESSION['counter'] = null;
-    $_SESSION['counter_done'] = false;
     header('Location: ' . $_SERVER['PHP_SELF']);
     exit;
 }
@@ -342,8 +317,33 @@ unset($_SESSION['draw_message']);
             cursor: pointer;
         }
         button.secondary { background: #374151; }
-        button.good { background: #10b981; }
-        button.bad { background: #ef4444; }
+        .icon-btn {
+            width: auto;
+            min-width: 0;
+            min-height: 0;
+            border: 0;
+            background: transparent;
+            color: #9ca3af;
+            font-size: 1.6rem;
+            line-height: 1;
+            padding: 2px 6px;
+            cursor: pointer;
+        }
+        .icon-btn.active-like { color: #34d399; }
+        .icon-btn.active-dislike { color: #f87171; }
+        .counter-tap {
+            display: inline-block;
+            margin-top: 6px;
+            font-size: clamp(1.6rem, 7vw, 2.2rem);
+            font-weight: 700;
+            color: #f9fafb;
+            padding: 8px 12px;
+            border-radius: 10px;
+            background: #111827;
+            border: 1px solid #374151;
+            user-select: none;
+            cursor: pointer;
+        }
         .actions {
             display: grid;
             grid-template-columns: 1fr;
@@ -403,13 +403,15 @@ unset($_SESSION['draw_message']);
 
         <div id="appBlock" style="display: none;">
             <p class="muted">Přihlášen: <strong id="who"><?= htmlspecialchars((string)($currentUser ?? '')) ?></strong></p>
-            <form method="post" class="row">
-                <input type="hidden" name="action" value="draw">
-                <label class="inline">
-                    <input type="checkbox" name="include_drawn" value="1"> Včetně už zobrazených
-                </label>
-                <button type="submit">🎲 Vylosovat úkol</button>
-            </form>
+            <?php if (!is_array($currentTask)): ?>
+                <form method="post" class="row">
+                    <input type="hidden" name="action" value="draw">
+                    <label class="inline">
+                        <input type="checkbox" name="include_drawn" value="1"> Včetně už zobrazených
+                    </label>
+                    <button type="submit">🎲 Vylosovat úkol</button>
+                </form>
+            <?php endif; ?>
             <div class="actions">
                 <form method="post">
                     <input type="hidden" name="action" value="logout">
@@ -436,30 +438,19 @@ unset($_SESSION['draw_message']);
             <p><?= nl2br(htmlspecialchars((string)($currentTask['popis'] ?? ''))) ?></p>
             <p class="muted">Pro: <?= htmlspecialchars((string)($currentTask['pro'] ?? 'neuvedeno')) ?> · Míra perverze: <?= htmlspecialchars((string)($currentTask['mira_perverze'] ?? 'neuvedeno')) ?></p>
 
-            <p><strong>Hodnocení:</strong> <?= $ratingNow === 'like' ? 'Líbí 👍' : ($ratingNow === 'dislike' ? 'Nelíbí 👎' : 'Zatím nehodnoceno') ?></p>
-            <div class="actions">
-                <form method="post">
-                    <input type="hidden" name="action" value="rate_task">
-                    <input type="hidden" name="vote" value="like">
-                    <button type="submit" class="good">👍 Líbí</button>
-                </form>
-                <form method="post">
-                    <input type="hidden" name="action" value="rate_task">
-                    <input type="hidden" name="vote" value="dislike">
-                    <button type="submit" class="bad">👎 Nelíbí</button>
-                </form>
+            <div class="row">
+                <p style="margin:0;"><strong>Hodnocení:</strong></p>
+                <button type="button" id="rateDown" class="icon-btn <?= $ratingNow === 'dislike' ? 'active-dislike' : '' ?>" aria-label="Nelíbí" title="Nelíbí">👎</button>
+                <button type="button" id="rateUp" class="icon-btn <?= $ratingNow === 'like' ? 'active-like' : '' ?>" aria-label="Líbí" title="Líbí">👍</button>
+                <span id="ratingStatus" class="muted"></span>
             </div>
 
             <?php if (is_string($durationRaw)): ?>
                 <hr>
                 <p><strong>Délka trvání:</strong> <?= htmlspecialchars($durationRaw) ?></p>
                 <div id="timerSection">
-                    <div class="timer" id="timerValue">00:00</div>
-                    <div class="actions">
-                        <button type="button" id="startBtn">▶ Start</button>
-                        <button type="button" id="pauseBtn" class="secondary">⏸ Pauza</button>
-                        <button type="button" id="resetBtn" class="secondary">↺ Reset</button>
-                    </div>
+                    <div class="timer" id="timerValue" title="Tukni pro spuštění">00:00</div>
+                    <p class="muted">Tukni na stopky pro spuštění. Běží bez pauzy až do obnovení stránky.</p>
                     <?php if (is_int($durationSeconds)): ?>
                         <p class="muted">Tip: cílový čas je <?= (int)$durationSeconds ?> s.</p>
                     <?php endif; ?>
@@ -467,28 +458,17 @@ unset($_SESSION['draw_message']);
             <?php endif; ?>
 
             <?php if ($repeatRaw !== null): ?>
+                <?php $repeatInitial = parseRepeatCount($repeatRaw); ?>
                 <hr>
-                <p><strong>Počet opakování (zadání):</strong> <?= htmlspecialchars((string)$repeatRaw) ?></p>
-                <p><strong>Zbývá:</strong> <?= (int)($_SESSION['counter'] ?? 0) ?></p>
-                <?php if (!empty($_SESSION['counter_done'])): ?>
-                    <p class="ok">✅ Splněno</p>
-                <?php endif; ?>
-                <div class="actions">
-                    <form method="post">
-                        <input type="hidden" name="action" value="counter_decrement">
-                        <button type="submit">-1</button>
-                    </form>
-                    <form method="post">
-                        <input type="hidden" name="action" value="counter_done">
-                        <button type="submit" class="secondary">Potvrdit splnění</button>
-                    </form>
-                </div>
+                <p><strong>Počet opakování:</strong></p>
+                <div id="repeatCount" class="counter-tap" data-initial="<?= (int)($repeatInitial ?? 0) ?>"><?= (int)($repeatInitial ?? 0) ?></div>
+                <p class="muted">Tuknutím se počet sníží o 1 (jen lokálně v prohlížeči).</p>
             <?php endif; ?>
 
             <div class="actions">
                 <form method="post">
                     <input type="hidden" name="action" value="reset_task">
-                    <button type="submit" class="secondary">Vyčistit úkol</button>
+                    <button type="submit" class="secondary">Ukončit úkol</button>
                 </form>
             </div>
         </div>
@@ -581,42 +561,94 @@ unset($_SESSION['draw_message']);
 
     tryStored();
 
-    const timerValue = document.getElementById('timerValue');
-    if (!timerValue) return;
+    const ratingStatus = document.getElementById('ratingStatus');
+    const rateUp = document.getElementById('rateUp');
+    const rateDown = document.getElementById('rateDown');
 
-    let elapsed = 0;
-    let interval = null;
-
-    const render = () => {
-        const mm = String(Math.floor(elapsed / 60)).padStart(2, '0');
-        const ss = String(elapsed % 60).padStart(2, '0');
-        timerValue.textContent = `${mm}:${ss}`;
+    const setRatingUI = (vote) => {
+        rateUp?.classList.toggle('active-like', vote === 'like');
+        rateDown?.classList.toggle('active-dislike', vote === 'dislike');
     };
 
-    document.getElementById('startBtn')?.addEventListener('click', () => {
-        if (interval) return;
-        interval = setInterval(() => {
-            elapsed += 1;
-            render();
-        }, 1000);
-    });
+    const sendRating = async (vote) => {
+        const data = new URLSearchParams();
+        data.set('action', 'api_rate_task');
+        data.set('vote', vote);
 
-    document.getElementById('pauseBtn')?.addEventListener('click', () => {
-        if (!interval) return;
-        clearInterval(interval);
-        interval = null;
-    });
+        const res = await fetch(window.location.pathname, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
+            body: data.toString()
+        });
 
-    document.getElementById('resetBtn')?.addEventListener('click', () => {
-        if (interval) {
-            clearInterval(interval);
-            interval = null;
+        return res.json();
+    };
+
+    rateUp?.addEventListener('click', async () => {
+        if (ratingStatus) ratingStatus.textContent = 'Ukládám…';
+        try {
+            const result = await sendRating('like');
+            if (!result.ok) throw new Error(result.error || 'error');
+            setRatingUI('like');
+            if (ratingStatus) ratingStatus.textContent = 'Uloženo';
+        } catch (e) {
+            if (ratingStatus) ratingStatus.textContent = 'Chyba uložení';
         }
-        elapsed = 0;
-        render();
     });
 
-    render();
+    rateDown?.addEventListener('click', async () => {
+        if (ratingStatus) ratingStatus.textContent = 'Ukládám…';
+        try {
+            const result = await sendRating('dislike');
+            if (!result.ok) throw new Error(result.error || 'error');
+            setRatingUI('dislike');
+            if (ratingStatus) ratingStatus.textContent = 'Uloženo';
+        } catch (e) {
+            if (ratingStatus) ratingStatus.textContent = 'Chyba uložení';
+        }
+    });
+
+    const timerValue = document.getElementById('timerValue');
+    if (timerValue) {
+        let elapsed = 0;
+        let started = false;
+
+        const render = () => {
+            const mm = String(Math.floor(elapsed / 60)).padStart(2, '0');
+            const ss = String(elapsed % 60).padStart(2, '0');
+            timerValue.textContent = `${mm}:${ss}`;
+        };
+
+        timerValue.addEventListener('click', () => {
+            if (started) return;
+            started = true;
+            setInterval(() => {
+                elapsed += 1;
+                render();
+            }, 1000);
+        });
+
+        render();
+    }
+
+    const repeatCount = document.getElementById('repeatCount');
+    if (repeatCount) {
+        let value = Number(repeatCount.dataset.initial || '0');
+        if (!Number.isFinite(value) || value < 0) value = 0;
+
+        const renderCount = () => {
+            repeatCount.textContent = String(value);
+        };
+
+        repeatCount.addEventListener('click', () => {
+            if (value > 0) {
+                value -= 1;
+                renderCount();
+            }
+        });
+
+        renderCount();
+    }
 })();
 </script>
 </body>
