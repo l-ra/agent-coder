@@ -490,10 +490,10 @@ unset($_SESSION['draw_message']);
                 <hr>
                 <p><strong>Délka trvání:</strong> <?= htmlspecialchars($durationRaw) ?></p>
                 <div id="timerSection">
-                    <div class="timer" id="timerValue" title="Tukni pro spuštění">00:00</div>
-                    <p class="muted">Tukni na stopky pro spuštění. Běží bez pauzy až do obnovení stránky.</p>
+                    <div class="timer" id="timerValue" title="Tukni pro spuštění" data-seconds="<?= (int)($durationSeconds ?? 0) ?>">00:00</div>
+                    <p class="muted">Tukni na stopky pro spuštění odpočtu. Běží bez pauzy až do obnovení stránky.</p>
                     <?php if (is_int($durationSeconds)): ?>
-                        <p class="muted">Tip: cílový čas je <?= (int)$durationSeconds ?> s.</p>
+                        <p class="muted">Odpočet: <?= (int)$durationSeconds ?> s.</p>
                     <?php endif; ?>
                 </div>
             <?php endif; ?>
@@ -683,21 +683,64 @@ unset($_SESSION['draw_message']);
 
     const timerValue = document.getElementById('timerValue');
     if (timerValue) {
-        let elapsed = 0;
+        let remaining = Number(timerValue.dataset.seconds || '0');
+        if (!Number.isFinite(remaining) || remaining < 0) remaining = 0;
         let started = false;
 
+        const audioCtx = (window.AudioContext || window.webkitAudioContext) ? new (window.AudioContext || window.webkitAudioContext)() : null;
+
+        const beep = (frequency = 880, durationMs = 120, volume = 0.05) => {
+            if (!audioCtx) return;
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.type = 'sine';
+            osc.frequency.value = frequency;
+            gain.gain.value = volume;
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.start();
+            setTimeout(() => {
+                osc.stop();
+            }, durationMs);
+        };
+
+        const finalSound = () => {
+            beep(520, 220, 0.08);
+            setTimeout(() => beep(360, 380, 0.08), 230);
+        };
+
         const render = () => {
-            const mm = String(Math.floor(elapsed / 60)).padStart(2, '0');
-            const ss = String(elapsed % 60).padStart(2, '0');
+            const mm = String(Math.floor(remaining / 60)).padStart(2, '0');
+            const ss = String(remaining % 60).padStart(2, '0');
             timerValue.textContent = `${mm}:${ss}`;
         };
 
-        timerValue.addEventListener('click', () => {
+        timerValue.addEventListener('click', async () => {
             if (started) return;
             started = true;
-            setInterval(() => {
-                elapsed += 1;
+            if (audioCtx && audioCtx.state === 'suspended') {
+                try { await audioCtx.resume(); } catch (e) {}
+            }
+
+            if (remaining <= 0) {
+                finalSound();
+                if (navigator.vibrate) navigator.vibrate([200, 120, 260]);
+                return;
+            }
+
+            const int = setInterval(() => {
+                remaining -= 1;
                 render();
+
+                if (remaining > 0 && remaining <= 5) {
+                    beep(1100, 90, 0.06);
+                }
+
+                if (remaining <= 0) {
+                    clearInterval(int);
+                    finalSound();
+                    if (navigator.vibrate) navigator.vibrate([220, 140, 320]);
+                }
             }, 1000);
         });
 
