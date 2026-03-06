@@ -247,7 +247,7 @@ if ($action === 'api_rate_task') {
     }
 
     $vote = (string)($_POST['vote'] ?? '');
-    if (!in_array($vote, ['like', 'dislike'], true)) {
+    if (!in_array($vote, ['like', 'dislike', 'none'], true)) {
         jsonResponse(['ok' => false, 'error' => 'Neplatné hodnocení.'], 400);
     }
 
@@ -258,7 +258,11 @@ if ($action === 'api_rate_task') {
     }
 
     try {
-        $currentProfile['ratings'][$tid] = $vote;
+        if ($vote === 'none') {
+            unset($currentProfile['ratings'][$tid]);
+        } else {
+            $currentProfile['ratings'][$tid] = $vote;
+        }
         saveProfile($domain, $currentUser, $currentProfile);
         jsonResponse(['ok' => true, 'vote' => $vote]);
     } catch (Throwable $e) {
@@ -266,7 +270,25 @@ if ($action === 'api_rate_task') {
     }
 }
 
-if ($action === 'reset_task') {
+if ($action === 'complete_task') {
+    $_SESSION['task'] = null;
+    header('Location: ' . $_SERVER['PHP_SELF']);
+    exit;
+}
+
+if ($action === 'skip_task') {
+    if (is_array($_SESSION['task']) && $currentUser && is_array($currentProfile)) {
+        $tid = (string)($_SESSION['task']['_task_id'] ?? '');
+        if ($tid !== '') {
+            unset($currentProfile['drawn'][$tid]);
+            try {
+                saveProfile($domain, $currentUser, $currentProfile);
+            } catch (Throwable $e) {
+                $_SESSION['draw_message'] = 'Nepodařilo se změnit stav úkolu.';
+            }
+        }
+    }
+
     $_SESSION['task'] = null;
     header('Location: ' . $_SERVER['PHP_SELF']);
     exit;
@@ -301,7 +323,14 @@ unset($_SESSION['draw_message']);
             padding: clamp(14px, 3vw, 18px);
             margin-bottom: 16px;
         }
-        h1 { font-size: clamp(1.35rem, 4.5vw, 1.75rem); margin-top: 0; margin-bottom: 10px; }
+        .header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+        }
+        .header-right { display: flex; align-items: center; gap: 10px; }
+        h1 { font-size: clamp(1.35rem, 4.5vw, 1.75rem); margin: 0; }
         h2 { margin-top: 0; font-size: clamp(1.15rem, 4.2vw, 1.45rem); }
         p { margin: 0 0 10px; }
         hr { border: 0; border-top: 1px solid #374151; margin: 14px 0; }
@@ -329,8 +358,18 @@ unset($_SESSION['draw_message']);
             padding: 2px 6px;
             cursor: pointer;
         }
+        .logout-btn {
+            width: auto;
+            min-width: 0;
+            min-height: 38px;
+            border-radius: 10px;
+            background: #374151;
+            padding: 6px 10px;
+            font-size: 1.05rem;
+        }
         .icon-btn.active-like { color: #34d399; }
         .icon-btn.active-dislike { color: #f87171; }
+        .is-hidden { display: none !important; }
         .counter-tap {
             display: inline-block;
             margin-top: 6px;
@@ -383,8 +422,16 @@ unset($_SESSION['draw_message']);
 <body>
 <div class="wrap">
     <div class="card">
-        <h1>Lechtivity</h1>
-        <p>Seznam úkolů je schovaný. Klikni a vylosuje se náhodný úkol.</p>
+        <div class="header">
+            <h1>Lechtivity</h1>
+            <div id="headerUserBox" class="header-right" style="display:none;">
+                <span class="muted" id="headerUser">—</span>
+                <form method="post" style="margin:0;">
+                    <input type="hidden" name="action" value="logout">
+                    <button type="submit" class="logout-btn" title="Odhlásit" aria-label="Odhlásit">🚪</button>
+                </form>
+            </div>
+        </div>
 
         <div id="authBlock" style="display: none;">
             <p><strong>Přihlášení / registrace</strong></p>
@@ -402,8 +449,8 @@ unset($_SESSION['draw_message']);
         </div>
 
         <div id="appBlock" style="display: none;">
-            <p class="muted">Přihlášen: <strong id="who"><?= htmlspecialchars((string)($currentUser ?? '')) ?></strong></p>
             <?php if (!is_array($currentTask)): ?>
+                <p>Aplikace pro párovou hru. Vylosujte si úkol a hrajte si.</p>
                 <form method="post" class="row">
                     <input type="hidden" name="action" value="draw">
                     <label class="inline">
@@ -412,12 +459,6 @@ unset($_SESSION['draw_message']);
                     <button type="submit">🎲 Vylosovat úkol</button>
                 </form>
             <?php endif; ?>
-            <div class="actions">
-                <form method="post">
-                    <input type="hidden" name="action" value="logout">
-                    <button type="submit" class="secondary">Odhlásit</button>
-                </form>
-            </div>
         </div>
 
         <?php if (is_string($drawMessage) && $drawMessage !== ''): ?>
@@ -438,10 +479,10 @@ unset($_SESSION['draw_message']);
             <p><?= nl2br(htmlspecialchars((string)($currentTask['popis'] ?? ''))) ?></p>
             <p class="muted">Pro: <?= htmlspecialchars((string)($currentTask['pro'] ?? 'neuvedeno')) ?> · Míra perverze: <?= htmlspecialchars((string)($currentTask['mira_perverze'] ?? 'neuvedeno')) ?></p>
 
-            <div class="row">
+            <div class="row" id="ratingRow" data-current="<?= htmlspecialchars($ratingNow) ?>">
                 <p style="margin:0;"><strong>Hodnocení:</strong></p>
-                <button type="button" id="rateDown" class="icon-btn <?= $ratingNow === 'dislike' ? 'active-dislike' : '' ?>" aria-label="Nelíbí" title="Nelíbí">👎</button>
-                <button type="button" id="rateUp" class="icon-btn <?= $ratingNow === 'like' ? 'active-like' : '' ?>" aria-label="Líbí" title="Líbí">👍</button>
+                <button type="button" id="rateDown" class="icon-btn <?= $ratingNow === 'dislike' ? 'active-dislike' : '' ?> <?= $ratingNow === 'like' ? 'is-hidden' : '' ?>" aria-label="Nelíbí" title="Nelíbí">👎</button>
+                <button type="button" id="rateUp" class="icon-btn <?= $ratingNow === 'like' ? 'active-like' : '' ?> <?= $ratingNow === 'dislike' ? 'is-hidden' : '' ?>" aria-label="Líbí" title="Líbí">👍</button>
                 <span id="ratingStatus" class="muted"></span>
             </div>
 
@@ -467,8 +508,12 @@ unset($_SESSION['draw_message']);
 
             <div class="actions">
                 <form method="post">
-                    <input type="hidden" name="action" value="reset_task">
-                    <button type="submit" class="secondary">Ukončit úkol</button>
+                    <input type="hidden" name="action" value="complete_task">
+                    <button type="submit" class="secondary">Hotovo</button>
+                </form>
+                <form method="post">
+                    <input type="hidden" name="action" value="skip_task">
+                    <button type="submit" class="secondary">Přeskočit</button>
                 </form>
             </div>
         </div>
@@ -483,12 +528,15 @@ unset($_SESSION['draw_message']);
     const usernameInput = document.getElementById('username');
     const passwordInput = document.getElementById('password');
     const authStatus = document.getElementById('authStatus');
-    const who = document.getElementById('who');
+    const headerUserBox = document.getElementById('headerUserBox');
+    const headerUser = document.getElementById('headerUser');
 
-    const setAuthView = (authenticated) => {
+    const setAuthView = (authenticated, username = '') => {
         if (!authBlock || !appBlock) return;
         authBlock.style.display = authenticated ? 'none' : 'block';
         appBlock.style.display = authenticated ? 'block' : 'none';
+        if (headerUserBox) headerUserBox.style.display = authenticated ? 'flex' : 'none';
+        if (headerUser) headerUser.textContent = authenticated ? username : '';
     };
 
     const authenticate = async (username, password) => {
@@ -519,8 +567,7 @@ unset($_SESSION['draw_message']);
         try {
             const result = await authenticate(storedUsername, storedPassword);
             if (result.ok) {
-                if (who) who.textContent = storedUsername;
-                setAuthView(true);
+                setAuthView(true, storedUsername);
                 return;
             }
         } catch (e) {
@@ -551,9 +598,8 @@ unset($_SESSION['draw_message']);
 
             localStorage.setItem('lechtivity_username', username);
             localStorage.setItem('lechtivity_password', password);
-            if (who) who.textContent = username;
             if (authStatus) authStatus.textContent = 'Přihlášeno.';
-            setAuthView(true);
+            setAuthView(true, username);
         } catch (e) {
             if (authStatus) authStatus.textContent = 'Chyba spojení se serverem.';
         }
@@ -562,12 +608,27 @@ unset($_SESSION['draw_message']);
     tryStored();
 
     const ratingStatus = document.getElementById('ratingStatus');
+    const ratingRow = document.getElementById('ratingRow');
     const rateUp = document.getElementById('rateUp');
     const rateDown = document.getElementById('rateDown');
 
-    const setRatingUI = (vote) => {
-        rateUp?.classList.toggle('active-like', vote === 'like');
-        rateDown?.classList.toggle('active-dislike', vote === 'dislike');
+    const applyRatingUI = (vote) => {
+        if (!rateUp || !rateDown) return;
+        rateUp.classList.toggle('active-like', vote === 'like');
+        rateDown.classList.toggle('active-dislike', vote === 'dislike');
+
+        if (vote === 'like') {
+            rateUp.classList.remove('is-hidden');
+            rateDown.classList.add('is-hidden');
+        } else if (vote === 'dislike') {
+            rateDown.classList.remove('is-hidden');
+            rateUp.classList.add('is-hidden');
+        } else {
+            rateUp.classList.remove('is-hidden');
+            rateDown.classList.remove('is-hidden');
+        }
+
+        if (ratingRow) ratingRow.dataset.current = vote;
     };
 
     const sendRating = async (vote) => {
@@ -585,11 +646,13 @@ unset($_SESSION['draw_message']);
     };
 
     rateUp?.addEventListener('click', async () => {
+        const current = ratingRow?.dataset.current || '';
+        const vote = current === 'like' ? 'none' : 'like';
         if (ratingStatus) ratingStatus.textContent = 'Ukládám…';
         try {
-            const result = await sendRating('like');
+            const result = await sendRating(vote);
             if (!result.ok) throw new Error(result.error || 'error');
-            setRatingUI('like');
+            applyRatingUI(vote === 'none' ? '' : vote);
             if (ratingStatus) ratingStatus.textContent = 'Uloženo';
         } catch (e) {
             if (ratingStatus) ratingStatus.textContent = 'Chyba uložení';
@@ -597,11 +660,13 @@ unset($_SESSION['draw_message']);
     });
 
     rateDown?.addEventListener('click', async () => {
+        const current = ratingRow?.dataset.current || '';
+        const vote = current === 'dislike' ? 'none' : 'dislike';
         if (ratingStatus) ratingStatus.textContent = 'Ukládám…';
         try {
-            const result = await sendRating('dislike');
+            const result = await sendRating(vote);
             if (!result.ok) throw new Error(result.error || 'error');
-            setRatingUI('dislike');
+            applyRatingUI(vote === 'none' ? '' : vote);
             if (ratingStatus) ratingStatus.textContent = 'Uloženo';
         } catch (e) {
             if (ratingStatus) ratingStatus.textContent = 'Chyba uložení';
