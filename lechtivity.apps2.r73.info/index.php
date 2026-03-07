@@ -112,6 +112,7 @@ function loadProfile(string $domain, string $username): ?array
 
     $data['ratings'] = is_array($data['ratings'] ?? null) ? $data['ratings'] : [];
     $data['drawn'] = is_array($data['drawn'] ?? null) ? $data['drawn'] : [];
+    $data['excluded'] = is_array($data['excluded'] ?? null) ? $data['excluded'] : [];
 
     return $data;
 }
@@ -122,6 +123,7 @@ function saveProfile(string $domain, string $username, array $profile): void
     $profile['username'] = $username;
     $profile['ratings'] = is_array($profile['ratings'] ?? null) ? $profile['ratings'] : [];
     $profile['drawn'] = is_array($profile['drawn'] ?? null) ? $profile['drawn'] : [];
+    $profile['excluded'] = is_array($profile['excluded'] ?? null) ? $profile['excluded'] : [];
     $profile['updated_at'] = gmdate('c');
 
     $written = @file_put_contents(
@@ -171,6 +173,7 @@ if ($action === 'api_auth') {
                 'password_hash' => password_hash($password, PASSWORD_DEFAULT),
                 'ratings' => [],
                 'drawn' => [],
+                'excluded' => [],
                 'created_at' => gmdate('c'),
             ];
             saveProfile($domain, $username, $profile);
@@ -211,6 +214,7 @@ if ($action === 'logout') {
 if ($action === 'reset_profile_state') {
     if ($currentUser && is_array($currentProfile)) {
         $currentProfile['drawn'] = [];
+        $currentProfile['excluded'] = [];
         try {
             saveProfile($domain, $currentUser, $currentProfile);
             $_SESSION['draw_message'] = 'Stav losování byl resetován.';
@@ -239,6 +243,11 @@ if ($action === 'draw') {
         }
         $tid = taskId($task, (int)$idx);
         $alreadyDrawn = !empty($currentProfile['drawn'][$tid]);
+        $isExcluded = !empty($currentProfile['excluded'][$tid]);
+        if ($isExcluded) {
+            continue;
+        }
+
         if ($includeDrawn || !$alreadyDrawn) {
             $task['_task_id'] = $tid;
             $eligible[] = $task;
@@ -323,6 +332,26 @@ if ($action === 'skip_task') {
     exit;
 }
 
+if ($action === 'exclude_task') {
+    if (is_array($_SESSION['task']) && $currentUser && is_array($currentProfile)) {
+        $tid = (string)($_SESSION['task']['_task_id'] ?? '');
+        if ($tid !== '') {
+            $currentProfile['excluded'][$tid] = true;
+            $currentProfile['drawn'][$tid] = true;
+            try {
+                saveProfile($domain, $currentUser, $currentProfile);
+                $_SESSION['draw_message'] = 'Úkol byl vyřazen z losování.';
+            } catch (Throwable $e) {
+                $_SESSION['draw_message'] = 'Nepodařilo se vyřadit úkol.';
+            }
+        }
+    }
+
+    $_SESSION['task'] = null;
+    header('Location: ' . $_SERVER['PHP_SELF']);
+    exit;
+}
+
 $currentTask = $_SESSION['task'];
 
 $taskOverview = [];
@@ -333,12 +362,14 @@ foreach ($tasks as $idx => $task) {
     }
 
     $tid = taskId($task, (int)$idx);
+    $isExcluded = !empty($currentProfile['excluded'][$tid]);
     $taskOverview[] = [
         'id' => $tid,
         'color' => perversionToColor($task['mira_perverze'] ?? null),
         'drawn' => !empty($currentProfile['drawn'][$tid]),
+        'excluded' => $isExcluded,
         'active' => $currentTaskId !== '' && $currentTaskId === $tid,
-        'label' => (string)($task['nazev'] ?? 'Úkol') . ' · perverze ' . (string)($task['mira_perverze'] ?? '?'),
+        'label' => (string)($task['nazev'] ?? 'Úkol') . ' · perverze ' . (string)($task['mira_perverze'] ?? '?') . ($isExcluded ? ' · vyřazeno' : ''),
     ];
 }
 
@@ -393,6 +424,23 @@ unset($_SESSION['draw_message']);
         .overview-task.drawn {
             filter: brightness(0.55);
             opacity: 0.92;
+        }
+        .overview-task.excluded {
+            filter: grayscale(1) brightness(0.45);
+            border-color: #6b7280;
+            position: relative;
+        }
+        .overview-task.excluded::after {
+            content: '';
+            position: absolute;
+            left: -1px;
+            top: -1px;
+            width: 5px;
+            height: 5px;
+            border-top: 1px solid #d1d5db;
+            transform: rotate(45deg);
+            transform-origin: center;
+            opacity: 0.9;
         }
         .overview-task.active {
             border-color: #f9fafb;
@@ -515,14 +563,14 @@ unset($_SESSION['draw_message']);
         <div class="overview" aria-label="Přehled úkolů">
             <?php foreach ($taskOverview as $item): ?>
                 <span
-                    class="overview-task<?= $item['drawn'] ? ' drawn' : '' ?><?= $item['active'] ? ' active' : '' ?>"
+                    class="overview-task<?= $item['drawn'] ? ' drawn' : '' ?><?= $item['excluded'] ? ' excluded' : '' ?><?= $item['active'] ? ' active' : '' ?>"
                     style="background: <?= htmlspecialchars($item['color']) ?>"
                     title="<?= htmlspecialchars($item['label']) ?>"
                     aria-label="<?= htmlspecialchars($item['label']) ?>"
                 ></span>
             <?php endforeach; ?>
         </div>
-        <p class="muted overview-help">Přehled: zelená → červená podle míry perverze, tmavé = už vylosované, bíle ohraničené = aktuálně zobrazený úkol.</p>
+        <p class="muted overview-help">Přehled: zelená → červená podle míry perverze, tmavé = už vylosované, přeškrtnuté = vyřazené, bíle ohraničené = aktuálně zobrazený úkol.</p>
 
         <div id="authBlock" style="display: none;">
             <p><strong>Přihlášení / registrace</strong></p>
@@ -605,6 +653,10 @@ unset($_SESSION['draw_message']);
                 <form method="post">
                     <input type="hidden" name="action" value="skip_task">
                     <button type="submit" class="secondary">Přeskočit</button>
+                </form>
+                <form method="post" onsubmit="return confirm('Opravdu vyřadit tento úkol z losování?');">
+                    <input type="hidden" name="action" value="exclude_task">
+                    <button type="submit" class="secondary">Vyřadit</button>
                 </form>
             </div>
         </div>
