@@ -208,6 +208,22 @@ if ($action === 'logout') {
     exit;
 }
 
+if ($action === 'reset_profile_state') {
+    if ($currentUser && is_array($currentProfile)) {
+        $currentProfile['drawn'] = [];
+        try {
+            saveProfile($domain, $currentUser, $currentProfile);
+            $_SESSION['draw_message'] = 'Stav losování byl resetován.';
+        } catch (Throwable $e) {
+            $_SESSION['draw_message'] = 'Reset se nepodařilo uložit.';
+        }
+    }
+
+    $_SESSION['task'] = null;
+    header('Location: ' . $_SERVER['PHP_SELF']);
+    exit;
+}
+
 if ($action === 'draw') {
     if (!$currentUser || !is_array($currentProfile)) {
         header('Location: ' . $_SERVER['PHP_SELF']);
@@ -485,6 +501,10 @@ unset($_SESSION['draw_message']);
             <h1>Lechtivity</h1>
             <div id="headerUserBox" class="header-right" style="display:none;">
                 <span class="muted" id="headerUser">—</span>
+                <form method="post" style="margin:0;" onsubmit="return confirm('Resetovat stav losování? Oblíbenost zůstane zachovaná.');">
+                    <input type="hidden" name="action" value="reset_profile_state">
+                    <button type="submit" class="logout-btn" title="Reset losování" aria-label="Reset losování">♻️</button>
+                </form>
                 <form method="post" style="margin:0;">
                     <input type="hidden" name="action" value="logout">
                     <button type="submit" class="logout-btn" title="Odhlásit" aria-label="Odhlásit">🚪</button>
