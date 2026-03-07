@@ -61,6 +61,19 @@ function taskId(array $task, int $idx): string
     return 't_' . $idx . '_' . substr(sha1($name . '|' . $desc), 0, 12);
 }
 
+function perversionToColor($raw): string
+{
+    $value = is_numeric($raw) ? (float)$raw : 1.0;
+    $value = max(1.0, min(10.0, $value));
+    $t = ($value - 1.0) / 9.0;
+
+    $r = (int)round(34 + (231 - 34) * $t);
+    $g = (int)round(197 + (76 - 197) * $t);
+    $b = (int)round(94 + (60 - 94) * $t);
+
+    return sprintf('#%02x%02x%02x', $r, $g, $b);
+}
+
 function profileBaseDir(): string
 {
     return '/working';
@@ -295,6 +308,24 @@ if ($action === 'skip_task') {
 }
 
 $currentTask = $_SESSION['task'];
+
+$taskOverview = [];
+$currentTaskId = is_array($currentTask) ? (string)($currentTask['_task_id'] ?? '') : '';
+foreach ($tasks as $idx => $task) {
+    if (!is_array($task)) {
+        continue;
+    }
+
+    $tid = taskId($task, (int)$idx);
+    $taskOverview[] = [
+        'id' => $tid,
+        'color' => perversionToColor($task['mira_perverze'] ?? null),
+        'drawn' => !empty($currentProfile['drawn'][$tid]),
+        'active' => $currentTaskId !== '' && $currentTaskId === $tid,
+        'label' => (string)($task['nazev'] ?? 'Úkol') . ' · perverze ' . (string)($task['mira_perverze'] ?? '?'),
+    ];
+}
+
 $drawMessage = $_SESSION['draw_message'] ?? null;
 unset($_SESSION['draw_message']);
 ?><!doctype html>
@@ -330,6 +361,34 @@ unset($_SESSION['draw_message']);
             gap: 12px;
         }
         .header-right { display: flex; align-items: center; gap: 10px; }
+        .overview {
+            margin-top: 12px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 2px;
+            align-items: flex-start;
+        }
+        .overview-task {
+            width: 5px;
+            height: 5px;
+            border-radius: 1px;
+            border: 1px solid transparent;
+        }
+        .overview-task.drawn {
+            filter: brightness(0.55);
+            opacity: 0.92;
+        }
+        .overview-task.active {
+            border-color: #f9fafb;
+            transform: scale(1.6);
+            box-shadow: 0 0 0 1px #111827;
+            z-index: 1;
+            position: relative;
+        }
+        .overview-help {
+            margin-top: 8px;
+            font-size: 0.86rem;
+        }
         h1 { font-size: clamp(1.35rem, 4.5vw, 1.75rem); margin: 0; }
         h2 { margin-top: 0; font-size: clamp(1.15rem, 4.2vw, 1.45rem); }
         p { margin: 0 0 10px; }
@@ -432,6 +491,18 @@ unset($_SESSION['draw_message']);
                 </form>
             </div>
         </div>
+
+        <div class="overview" aria-label="Přehled úkolů">
+            <?php foreach ($taskOverview as $item): ?>
+                <span
+                    class="overview-task<?= $item['drawn'] ? ' drawn' : '' ?><?= $item['active'] ? ' active' : '' ?>"
+                    style="background: <?= htmlspecialchars($item['color']) ?>"
+                    title="<?= htmlspecialchars($item['label']) ?>"
+                    aria-label="<?= htmlspecialchars($item['label']) ?>"
+                ></span>
+            <?php endforeach; ?>
+        </div>
+        <p class="muted overview-help">Přehled: zelená → červená podle míry perverze, tmavé = už vylosované, bíle ohraničené = aktuálně zobrazený úkol.</p>
 
         <div id="authBlock" style="display: none;">
             <p><strong>Přihlášení / registrace</strong></p>
