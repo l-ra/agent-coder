@@ -113,6 +113,7 @@ function loadProfile(string $domain, string $username): ?array
     $data['ratings'] = is_array($data['ratings'] ?? null) ? $data['ratings'] : [];
     $data['drawn'] = is_array($data['drawn'] ?? null) ? $data['drawn'] : [];
     $data['excluded'] = is_array($data['excluded'] ?? null) ? $data['excluded'] : [];
+    $data['review'] = is_array($data['review'] ?? null) ? $data['review'] : [];
 
     return $data;
 }
@@ -124,6 +125,7 @@ function saveProfile(string $domain, string $username, array $profile): void
     $profile['ratings'] = is_array($profile['ratings'] ?? null) ? $profile['ratings'] : [];
     $profile['drawn'] = is_array($profile['drawn'] ?? null) ? $profile['drawn'] : [];
     $profile['excluded'] = is_array($profile['excluded'] ?? null) ? $profile['excluded'] : [];
+    $profile['review'] = is_array($profile['review'] ?? null) ? $profile['review'] : [];
     $profile['updated_at'] = gmdate('c');
 
     $written = @file_put_contents(
@@ -174,6 +176,7 @@ if ($action === 'api_auth') {
                 'ratings' => [],
                 'drawn' => [],
                 'excluded' => [],
+                'review' => [],
                 'created_at' => gmdate('c'),
             ];
             saveProfile($domain, $username, $profile);
@@ -216,8 +219,9 @@ if ($action === 'reset_profile_state') {
         $resetDrawn = ($_POST['reset_drawn'] ?? '0') === '1';
         $resetRatings = ($_POST['reset_ratings'] ?? '0') === '1';
         $resetExcluded = ($_POST['reset_excluded'] ?? '0') === '1';
+        $resetReview = ($_POST['reset_review'] ?? '0') === '1';
 
-        if (!$resetDrawn && !$resetRatings && !$resetExcluded) {
+        if (!$resetDrawn && !$resetRatings && !$resetExcluded && !$resetReview) {
             $_SESSION['draw_message'] = 'Vyber aspoň jednu část profilu k resetu.';
             header('Location: ' . $_SERVER['PHP_SELF']);
             exit;
@@ -232,6 +236,9 @@ if ($action === 'reset_profile_state') {
         if ($resetExcluded) {
             $currentProfile['excluded'] = [];
         }
+        if ($resetReview) {
+            $currentProfile['review'] = [];
+        }
 
         try {
             saveProfile($domain, $currentUser, $currentProfile);
@@ -239,6 +246,7 @@ if ($action === 'reset_profile_state') {
             if ($resetDrawn) { $parts[] = 'vylosované'; }
             if ($resetRatings) { $parts[] = 'oblíbenost'; }
             if ($resetExcluded) { $parts[] = 'vyřazení'; }
+            if ($resetReview) { $parts[] = 'k revizi'; }
             $_SESSION['draw_message'] = 'Resetováno: ' . implode(', ', $parts) . '.';
         } catch (Throwable $e) {
             $_SESSION['draw_message'] = 'Reset se nepodařilo uložit.';
@@ -374,6 +382,26 @@ if ($action === 'exclude_task') {
     exit;
 }
 
+if ($action === 'review_task') {
+    if (is_array($_SESSION['task']) && $currentUser && is_array($currentProfile)) {
+        $tid = (string)($_SESSION['task']['_task_id'] ?? '');
+        if ($tid !== '') {
+            $currentProfile['review'][$tid] = true;
+            $currentProfile['drawn'][$tid] = true;
+            try {
+                saveProfile($domain, $currentUser, $currentProfile);
+                $_SESSION['draw_message'] = 'Úkol byl označen k revizi.';
+            } catch (Throwable $e) {
+                $_SESSION['draw_message'] = 'Nepodařilo se uložit stav revize.';
+            }
+        }
+    }
+
+    $_SESSION['task'] = null;
+    header('Location: ' . $_SERVER['PHP_SELF']);
+    exit;
+}
+
 $currentTask = $_SESSION['task'];
 
 $taskOverview = [];
@@ -385,13 +413,15 @@ foreach ($tasks as $idx => $task) {
 
     $tid = taskId($task, (int)$idx);
     $isExcluded = !empty($currentProfile['excluded'][$tid]);
+    $isReview = !empty($currentProfile['review'][$tid]);
     $taskOverview[] = [
         'id' => $tid,
         'color' => perversionToColor($task['mira_perverze'] ?? null),
         'drawn' => !empty($currentProfile['drawn'][$tid]),
         'excluded' => $isExcluded,
+        'review' => $isReview,
         'active' => $currentTaskId !== '' && $currentTaskId === $tid,
-        'label' => (string)($task['nazev'] ?? 'Úkol') . ' · perverze ' . (string)($task['mira_perverze'] ?? '?') . ($isExcluded ? ' · vyřazeno' : ''),
+        'label' => (string)($task['nazev'] ?? 'Úkol') . ' · perverze ' . (string)($task['mira_perverze'] ?? '?') . ($isExcluded ? ' · vyřazeno' : '') . ($isReview ? ' · k revizi' : ''),
     ];
 }
 
@@ -510,6 +540,10 @@ unset($_SESSION['draw_message']);
             transform: rotate(45deg);
             transform-origin: center;
             opacity: 0.9;
+        }
+        .overview-task.review {
+            border-color: #fbbf24;
+            box-shadow: 0 0 0 1px rgba(251,191,36,0.35);
         }
         .overview-task.active {
             border-color: #f9fafb;
@@ -677,6 +711,7 @@ unset($_SESSION['draw_message']);
                         <label><input type="checkbox" name="reset_drawn" value="1" checked> Reset vylosovaných</label>
                         <label><input type="checkbox" name="reset_ratings" value="1"> Reset oblíbenosti</label>
                         <label><input type="checkbox" name="reset_excluded" value="1" checked> Reset vyřazení</label>
+                        <label><input type="checkbox" name="reset_review" value="1" checked> Reset k revizi</label>
                     </div>
                     <div class="reset-actions">
                         <button type="submit" class="secondary">Provést reset</button>
@@ -689,14 +724,14 @@ unset($_SESSION['draw_message']);
         <div class="overview" aria-label="Přehled úkolů">
             <?php foreach ($taskOverview as $item): ?>
                 <span
-                    class="overview-task<?= $item['drawn'] ? ' drawn' : '' ?><?= $item['excluded'] ? ' excluded' : '' ?><?= $item['active'] ? ' active' : '' ?>"
+                    class="overview-task<?= $item['drawn'] ? ' drawn' : '' ?><?= $item['excluded'] ? ' excluded' : '' ?><?= $item['review'] ? ' review' : '' ?><?= $item['active'] ? ' active' : '' ?>"
                     style="background: <?= htmlspecialchars($item['color']) ?>"
                     title="<?= htmlspecialchars($item['label']) ?>"
                     aria-label="<?= htmlspecialchars($item['label']) ?>"
                 ></span>
             <?php endforeach; ?>
         </div>
-        <p class="muted overview-help">Přehled: zelená → červená podle míry perverze, tmavé = už vylosované, přeškrtnuté = vyřazené, bíle ohraničené = aktuálně zobrazený úkol.</p>
+        <p class="muted overview-help">Přehled: zelená → červená podle míry perverze, tmavé = už vylosované, přeškrtnuté = vyřazené, žlutě orámované = k revizi, bíle ohraničené = aktuálně zobrazený úkol.</p>
 
         <div id="authBlock" style="display: none;">
             <p><strong>Přihlášení / registrace</strong></p>
@@ -779,6 +814,10 @@ unset($_SESSION['draw_message']);
                 <form method="post">
                     <input type="hidden" name="action" value="skip_task">
                     <button type="submit" class="secondary">Přeskočit</button>
+                </form>
+                <form method="post" onsubmit="return confirm('Označit tento úkol k revizi?');">
+                    <input type="hidden" name="action" value="review_task">
+                    <button type="submit" class="secondary">K revizi</button>
                 </form>
                 <form method="post" onsubmit="return confirm('Opravdu vyřadit tento úkol z losování?');">
                     <input type="hidden" name="action" value="exclude_task">
