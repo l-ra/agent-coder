@@ -213,11 +213,33 @@ if ($action === 'logout') {
 
 if ($action === 'reset_profile_state') {
     if ($currentUser && is_array($currentProfile)) {
-        $currentProfile['drawn'] = [];
-        $currentProfile['excluded'] = [];
+        $resetDrawn = ($_POST['reset_drawn'] ?? '0') === '1';
+        $resetRatings = ($_POST['reset_ratings'] ?? '0') === '1';
+        $resetExcluded = ($_POST['reset_excluded'] ?? '0') === '1';
+
+        if (!$resetDrawn && !$resetRatings && !$resetExcluded) {
+            $_SESSION['draw_message'] = 'Vyber aspoň jednu část profilu k resetu.';
+            header('Location: ' . $_SERVER['PHP_SELF']);
+            exit;
+        }
+
+        if ($resetDrawn) {
+            $currentProfile['drawn'] = [];
+        }
+        if ($resetRatings) {
+            $currentProfile['ratings'] = [];
+        }
+        if ($resetExcluded) {
+            $currentProfile['excluded'] = [];
+        }
+
         try {
             saveProfile($domain, $currentUser, $currentProfile);
-            $_SESSION['draw_message'] = 'Stav losování byl resetován.';
+            $parts = [];
+            if ($resetDrawn) { $parts[] = 'vylosované'; }
+            if ($resetRatings) { $parts[] = 'oblíbenost'; }
+            if ($resetExcluded) { $parts[] = 'vyřazení'; }
+            $_SESSION['draw_message'] = 'Resetováno: ' . implode(', ', $parts) . '.';
         } catch (Throwable $e) {
             $_SESSION['draw_message'] = 'Reset se nepodařilo uložit.';
         }
@@ -490,6 +512,44 @@ unset($_SESSION['draw_message']);
             padding: 6px 10px;
             font-size: 1.05rem;
         }
+        dialog.reset-dialog {
+            border: 1px solid #4b5563;
+            border-radius: 14px;
+            background: #1f2937;
+            color: #f9fafb;
+            width: min(92vw, 360px);
+            padding: 0;
+        }
+        dialog.reset-dialog::backdrop {
+            background: rgba(0, 0, 0, 0.6);
+        }
+        .reset-dialog-inner {
+            padding: 14px;
+        }
+        .reset-dialog h3 {
+            margin: 0 0 10px;
+            font-size: 1rem;
+        }
+        .reset-options {
+            display: grid;
+            gap: 10px;
+            margin: 8px 0 12px;
+        }
+        .reset-options label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+        }
+        .reset-actions {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        .reset-actions button {
+            width: auto;
+            min-width: 120px;
+        }
         .icon-btn.active-like { color: #34d399; }
         .icon-btn.active-dislike { color: #f87171; }
         .is-hidden { display: none !important; }
@@ -549,16 +609,31 @@ unset($_SESSION['draw_message']);
             <h1>Lechtivity</h1>
             <div id="headerUserBox" class="header-right" style="display:none;">
                 <span class="muted" id="headerUser">—</span>
-                <form method="post" style="margin:0;" onsubmit="return confirm('Resetovat stav losování? Oblíbenost zůstane zachovaná.');">
-                    <input type="hidden" name="action" value="reset_profile_state">
-                    <button type="submit" class="logout-btn" title="Reset losování" aria-label="Reset losování">♻️</button>
-                </form>
+                <button type="button" id="resetOpenBtn" class="logout-btn" title="Reset profilu" aria-label="Reset profilu">♻️</button>
                 <form method="post" style="margin:0;">
                     <input type="hidden" name="action" value="logout">
                     <button type="submit" class="logout-btn" title="Odhlásit" aria-label="Odhlásit">🚪</button>
                 </form>
             </div>
         </div>
+
+        <dialog id="resetDialog" class="reset-dialog">
+            <div class="reset-dialog-inner">
+                <h3>Reset profilu</h3>
+                <form method="post">
+                    <input type="hidden" name="action" value="reset_profile_state">
+                    <div class="reset-options">
+                        <label><input type="checkbox" name="reset_drawn" value="1" checked> Reset vylosovaných</label>
+                        <label><input type="checkbox" name="reset_ratings" value="1"> Reset oblíbenosti</label>
+                        <label><input type="checkbox" name="reset_excluded" value="1" checked> Reset vyřazení</label>
+                    </div>
+                    <div class="reset-actions">
+                        <button type="submit" class="secondary">Provést reset</button>
+                        <button type="button" class="secondary" id="resetCloseBtn">Zrušit</button>
+                    </div>
+                </form>
+            </div>
+        </dialog>
 
         <div class="overview" aria-label="Přehled úkolů">
             <?php foreach ($taskOverview as $item): ?>
@@ -673,6 +748,9 @@ unset($_SESSION['draw_message']);
     const authStatus = document.getElementById('authStatus');
     const headerUserBox = document.getElementById('headerUserBox');
     const headerUser = document.getElementById('headerUser');
+    const resetDialog = document.getElementById('resetDialog');
+    const resetOpenBtn = document.getElementById('resetOpenBtn');
+    const resetCloseBtn = document.getElementById('resetCloseBtn');
 
     const setAuthView = (authenticated, username = '') => {
         if (!authBlock || !appBlock) return;
@@ -757,6 +835,27 @@ unset($_SESSION['draw_message']);
     });
 
     tryStored();
+
+    resetOpenBtn?.addEventListener('click', () => {
+        if (!resetDialog) return;
+        if (typeof resetDialog.showModal === 'function') {
+            resetDialog.showModal();
+        }
+    });
+
+    resetCloseBtn?.addEventListener('click', () => {
+        if (!resetDialog) return;
+        resetDialog.close();
+    });
+
+    resetDialog?.addEventListener('click', (e) => {
+        const rect = resetDialog.getBoundingClientRect();
+        const inDialog = rect.top <= e.clientY && e.clientY <= rect.top + rect.height
+            && rect.left <= e.clientX && e.clientX <= rect.left + rect.width;
+        if (!inDialog) {
+            resetDialog.close();
+        }
+    });
 
     const ratingStatus = document.getElementById('ratingStatus');
     const ratingRow = document.getElementById('ratingRow');
