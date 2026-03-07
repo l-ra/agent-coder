@@ -430,6 +430,53 @@ unset($_SESSION['draw_message']);
             gap: 12px;
         }
         .header-right { display: flex; align-items: center; gap: 10px; }
+        .brand {
+            position: relative;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding-right: 6px;
+        }
+        .brand::before {
+            content: '';
+            position: absolute;
+            left: -8px;
+            top: 50%;
+            width: 44px;
+            height: 44px;
+            border-radius: 999px;
+            background: radial-gradient(circle, rgba(236,72,153,0.28) 0%, rgba(236,72,153,0) 72%);
+            transform: translateY(-50%);
+            pointer-events: none;
+            filter: blur(1px);
+        }
+        .brand-title {
+            margin: 0;
+            font-size: clamp(1.35rem, 4.5vw, 1.75rem);
+            letter-spacing: 0.2px;
+        }
+        .brand-heart {
+            font-size: 1rem;
+            animation: pulseHeart 1.9s ease-in-out infinite;
+            transform-origin: center;
+        }
+        .brand-bar {
+            height: 4px;
+            border-radius: 999px;
+            margin-top: 10px;
+            background: linear-gradient(90deg, #22c55e, #84cc16, #f59e0b, #ef4444, #ec4899, #22c55e);
+            background-size: 220% 100%;
+            animation: barFlow 6s linear infinite;
+            opacity: 0.92;
+        }
+        @keyframes barFlow {
+            0% { background-position: 0% 0; }
+            100% { background-position: 220% 0; }
+        }
+        @keyframes pulseHeart {
+            0%, 100% { transform: scale(1); opacity: 0.85; }
+            50% { transform: scale(1.22); opacity: 1; }
+        }
         .overview {
             margin-top: 12px;
             display: flex;
@@ -475,7 +522,7 @@ unset($_SESSION['draw_message']);
             margin-top: 8px;
             font-size: 0.86rem;
         }
-        h1 { font-size: clamp(1.35rem, 4.5vw, 1.75rem); margin: 0; }
+        h1 { margin: 0; }
         h2 { margin-top: 0; font-size: clamp(1.15rem, 4.2vw, 1.45rem); }
         p { margin: 0 0 10px; }
         hr { border: 0; border-top: 1px solid #374151; margin: 14px 0; }
@@ -606,7 +653,10 @@ unset($_SESSION['draw_message']);
 <div class="wrap">
     <div class="card">
         <div class="header">
-            <h1>Lechtivity</h1>
+            <div class="brand" aria-label="Lechtivity">
+                <h1 class="brand-title">Lechtivity</h1>
+                <span class="brand-heart" aria-hidden="true">💗</span>
+            </div>
             <div id="headerUserBox" class="header-right" style="display:none;">
                 <span class="muted" id="headerUser">—</span>
                 <button type="button" id="resetOpenBtn" class="logout-btn" title="Reset profilu" aria-label="Reset profilu">♻️</button>
@@ -616,6 +666,7 @@ unset($_SESSION['draw_message']);
                 </form>
             </div>
         </div>
+        <div class="brand-bar" aria-hidden="true"></div>
 
         <dialog id="resetDialog" class="reset-dialog">
             <div class="reset-dialog-inner">
