@@ -2,9 +2,15 @@
 
 declare(strict_types=1);
 
-$dbPath = '/working/eroze.apps2.r73.info/app.sqlite';
-$dsn = 'sqlite:' . $dbPath;
+$appDns = getenv('APP_DNS') ?: 'eroze.apps2.r73.info';
+$dbPath = '/working/' . $appDns . '/app.sqlite';
 
+$dbDir = dirname($dbPath);
+if (!is_dir($dbDir)) {
+    @mkdir($dbDir, 0777, true);
+}
+
+$dsn = 'sqlite:' . $dbPath;
 $pdo = new PDO($dsn);
 $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 $pdo->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
