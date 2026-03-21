@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-$dbPath = __DIR__ . '/data/app.sqlite';
+$dbPath = '/working/eroze.apps2.r73.info/app.sqlite';
 $dsn = 'sqlite:' . $dbPath;
 
 $pdo = new PDO($dsn);
