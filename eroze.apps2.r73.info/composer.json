@@ -1,0 +1,6 @@
+{
+  "name": "lra/eroze-pravniho-statu",
+  "description": "Mini PHP app pro evidenci odkazu k tematu eroze pravniho statu",
+  "type": "project",
+  "require": {}
+}
