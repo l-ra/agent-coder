@@ -38,13 +38,20 @@ $categories = $pdo->query('SELECT DISTINCT category FROM links ORDER BY category
         .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
         .badge { display: inline-block; background: #eef; color: #224; border-radius: 999px; padding: 2px 10px; font-size: 12px; }
         .topbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+        .hidden { display: none; }
     </style>
 </head>
 <body>
     <h1>Eroze právního státu</h1>
     <p class="muted">Databáze odkazů + ručně/AI vytvořená shrnutí + kategorie.</p>
+    <p>
+        Tahle stránka slouží jako průběžný archiv případů, které mohou souviset s oslabováním pravidel právního státu.
+        Každý záznam obsahuje odkaz na zdroj, stručné shrnutí a tematickou kategorii, aby šlo případy snadno filtrovat a porovnávat v čase.
+    </p>
 
-    <div class="card">
+    <button type="button" id="toggleFormBtn" onclick="toggleAddForm()">➕ Přidat nový záznam</button>
+
+    <div class="card hidden" id="addFormCard">
         <form method="post" action="save.php">
             <label for="url">Odkaz</label>
             <input id="url" name="url" type="url" required placeholder="https://...">
@@ -99,5 +106,21 @@ $categories = $pdo->query('SELECT DISTINCT category FROM links ORDER BY category
             </article>
         <?php endforeach; ?>
     <?php endif; ?>
+
+    <script>
+        function toggleAddForm() {
+            const card = document.getElementById('addFormCard');
+            const btn = document.getElementById('toggleFormBtn');
+            const isHidden = card.classList.contains('hidden');
+
+            if (isHidden) {
+                card.classList.remove('hidden');
+                btn.textContent = '✖ Zavřít formulář';
+            } else {
+                card.classList.add('hidden');
+                btn.textContent = '➕ Přidat nový záznam';
+            }
+        }
+    </script>
 </body>
 </html>
