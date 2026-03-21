@@ -23,7 +23,7 @@ $pdo->exec(
         source_type TEXT,
         category TEXT NOT NULL,
         summary TEXT NOT NULL,
-        created_at TEXT NOT NULL DEFAULT (datetime("now"))
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     )'
 );
 
