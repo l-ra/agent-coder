@@ -25,7 +25,9 @@ Očekávaná hodnota se čte ze souboru:
 
 Bez tohoto souboru endpoint vrátí HTTP 500 a zápis neproběhne.
 
-## Admin endpoint pro mazání
+## Admin endpointy
+
+### Mazání
 
 Endpoint: `POST /admin_delete.php`
 
@@ -37,6 +39,18 @@ Alespoň jedno z polí:
 - `url` (konkrétní URL)
 
 Odpověď je JSON, např. `{ "ok": true, "deleted": 1 }`.
+
+### Výpis
+
+Endpoint: `POST /admin_list.php`
+
+Povinné pole:
+- `secret` (stejné admin tajemství jako výše)
+
+Volitelné pole:
+- `limit` (1–100, default 20)
+
+Odpověď je JSON, např. `{ "ok": true, "count": 20, "items": [...] }`.
 
 ## Poznámka
 
