@@ -25,6 +25,19 @@ Očekávaná hodnota se čte ze souboru:
 
 Bez tohoto souboru endpoint vrátí HTTP 500 a zápis neproběhne.
 
+## Admin endpoint pro mazání
+
+Endpoint: `POST /admin_delete.php`
+
+Povinné pole:
+- `secret` (admin tajemství ze souboru `/working/eroze.apps2.r73.info/admin_secret.txt`)
+
+Alespoň jedno z polí:
+- `id` (ID záznamu)
+- `url` (konkrétní URL)
+
+Odpověď je JSON, např. `{ "ok": true, "deleted": 1 }`.
+
 ## Poznámka
 
 Až pošleš DNS název cíle, připravím strukturu i pro deploy přes `php-k8s-app-installer` (repo `git@github.com:l-ra/agent-coder.git`, složka podle DNS).
