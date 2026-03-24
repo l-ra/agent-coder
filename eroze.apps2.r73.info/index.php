@@ -81,6 +81,9 @@ $categories = $pdo->query('SELECT DISTINCT category FROM links ORDER BY category
             <label for="summary">Shrnutí</label>
             <textarea id="summary" name="summary" required placeholder="Krátké shrnutí: co se stalo, proč je to relevantní pro erozi právního státu."></textarea>
 
+            <label for="secret">Tajemství</label>
+            <input id="secret" name="secret" type="password" required placeholder="Sdílené tajemství pro zápis">
+
             <button type="submit">Přidat záznam</button>
         </form>
     </div>

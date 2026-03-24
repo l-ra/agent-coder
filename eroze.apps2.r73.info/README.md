@@ -16,6 +16,15 @@ Pak otevři `http://localhost:8080`.
 V produkčním kontejnerovém prostředí se používá `/working/<dns-name>/app.sqlite`.
 Pro tuto appku tedy standardně `/working/eroze.apps2.r73.info/app.sqlite`.
 
+## Tajemství pro zápis
+
+Formulář i endpoint `save.php` vyžadují pole `secret`.
+Očekávaná hodnota se čte ze souboru:
+
+`/working/eroze.apps2.r73.info/ingest_secret.txt`
+
+Bez tohoto souboru endpoint vrátí HTTP 500 a zápis neproběhne.
+
 ## Poznámka
 
 Až pošleš DNS název cíle, připravím strukturu i pro deploy přes `php-k8s-app-installer` (repo `git@github.com:l-ra/agent-coder.git`, složka podle DNS).
