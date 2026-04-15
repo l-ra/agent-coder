@@ -28,7 +28,7 @@ $categories = $pdo->query('SELECT DISTINCT category FROM links ORDER BY category
     <title>Eroze právního státu – sběr odkazů</title>
     <style>
         body { font-family: Arial, sans-serif; margin: 20px; max-width: 980px; }
-        h1 { margin-bottom: 8px; }
+        h1 { margin: 0; }
         .muted { color: #666; font-size: 14px; }
         .card { border: 1px solid #ddd; border-radius: 8px; padding: 14px; margin: 12px 0; }
         label { display: block; margin-top: 8px; font-weight: 600; }
@@ -39,19 +39,37 @@ $categories = $pdo->query('SELECT DISTINCT category FROM links ORDER BY category
         .badge { display: inline-block; background: #eef; color: #224; border-radius: 999px; padding: 2px 10px; font-size: 12px; }
         .topbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
         .hidden { display: none; }
-        .actions { margin-top: 10px; }
         .small { font-size: 13px; }
+        .titlebar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+        .icon-btn {
+            width: 34px;
+            height: 34px;
+            padding: 0;
+            margin: 0;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            line-height: 1;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            background: #fff;
+            cursor: pointer;
+        }
+        .record-card { position: relative; padding-right: 52px; }
+        .card-edit-btn { position: absolute; top: 10px; right: 10px; }
     </style>
 </head>
 <body>
-    <h1>Eroze právního státu</h1>
+    <div class="titlebar">
+        <h1>Eroze právního státu</h1>
+        <button type="button" class="icon-btn" id="toggleFormBtn" onclick="toggleAddForm()" aria-label="Přidat nový záznam" title="Přidat nový záznam">➕</button>
+    </div>
     <p class="muted">Databáze odkazů + ručně/AI vytvořená shrnutí + kategorie.</p>
     <p>
         Tahle stránka slouží jako průběžný archiv případů, které mohou souviset s oslabováním pravidel právního státu.
         Každý záznam obsahuje odkaz na zdroj, stručné shrnutí a tematickou kategorii, aby šlo případy snadno filtrovat a porovnávat v čase.
     </p>
-
-    <button type="button" id="toggleFormBtn" onclick="toggleAddForm()">➕ Přidat nový záznam</button>
 
     <div class="card hidden" id="addFormCard">
         <form method="post" action="save.php">
@@ -111,16 +129,13 @@ $categories = $pdo->query('SELECT DISTINCT category FROM links ORDER BY category
         <p class="muted">Zatím žádné záznamy.</p>
     <?php else: ?>
         <?php foreach ($items as $item): ?>
-            <article class="card" id="item-<?= (int)$item['id'] ?>">
+            <article class="card record-card" id="item-<?= (int)$item['id'] ?>">
+                <button type="button" class="icon-btn card-edit-btn" onclick="toggleEditForm(<?= (int)$item['id'] ?>)" aria-label="Upravit záznam" title="Upravit záznam">✏️</button>
                 <div class="muted"><?= htmlspecialchars((string)$item['created_at']) ?> · <?= htmlspecialchars((string)($item['source_type'] ?: 'neuvedeno')) ?></div>
                 <?php if (!empty($item['title'])): ?><h3><?= htmlspecialchars((string)$item['title']) ?></h3><?php endif; ?>
                 <div><a href="<?= htmlspecialchars((string)$item['url']) ?>" target="_blank" rel="noopener noreferrer"><?= htmlspecialchars((string)$item['url']) ?></a></div>
                 <p><span class="badge"><?= htmlspecialchars((string)$item['category']) ?></span></p>
                 <p><?= nl2br(htmlspecialchars((string)$item['summary'])) ?></p>
-
-                <div class="actions">
-                    <button type="button" onclick="toggleEditForm(<?= (int)$item['id'] ?>)">✏️ Upravit záznam</button>
-                </div>
 
                 <div class="card hidden" id="editForm-<?= (int)$item['id'] ?>">
                     <form method="post" action="save.php">
@@ -181,10 +196,14 @@ $categories = $pdo->query('SELECT DISTINCT category FROM links ORDER BY category
 
             if (isHidden) {
                 card.classList.remove('hidden');
-                btn.textContent = '✖ Zavřít formulář';
+                btn.textContent = '✖';
+                btn.setAttribute('aria-label', 'Zavřít formulář');
+                btn.setAttribute('title', 'Zavřít formulář');
             } else {
                 card.classList.add('hidden');
-                btn.textContent = '➕ Přidat nový záznam';
+                btn.textContent = '➕';
+                btn.setAttribute('aria-label', 'Přidat nový záznam');
+                btn.setAttribute('title', 'Přidat nový záznam');
             }
         }
 
