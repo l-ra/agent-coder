@@ -18,7 +18,14 @@ $stmt = $pdo->prepare($sql);
 $stmt->execute($params);
 $items = $stmt->fetchAll();
 
-$categories = $pdo->query('SELECT DISTINCT category FROM links ORDER BY category ASC')->fetchAll(PDO::FETCH_COLUMN);
+$totalCount = (int)$pdo->query('SELECT COUNT(*) FROM links')->fetchColumn();
+$categoryStatsRows = $pdo->query('SELECT category, COUNT(*) AS cnt FROM links GROUP BY category ORDER BY category ASC')->fetchAll();
+$categoryCounts = [];
+foreach ($categoryStatsRows as $row) {
+    $catName = (string)$row['category'];
+    $categoryCounts[$catName] = (int)$row['cnt'];
+}
+$categories = array_keys($categoryCounts);
 ?>
 <!doctype html>
 <html lang="cs">
@@ -119,9 +126,9 @@ $categories = $pdo->query('SELECT DISTINCT category FROM links ORDER BY category
 
     <div class="topbar">
         <strong>Filtr:</strong>
-        <a href="index.php">vše</a>
+        <a href="index.php"><span class="badge">vše (<?= $totalCount ?>)</span></a>
         <?php foreach ($categories as $cat): ?>
-            <a href="?category=<?= urlencode((string)$cat) ?>"><span class="badge"><?= htmlspecialchars((string)$cat) ?></span></a>
+            <a href="?category=<?= urlencode((string)$cat) ?>"><span class="badge"><?= htmlspecialchars((string)$cat) ?> (<?= (int)($categoryCounts[(string)$cat] ?? 0) ?>)</span></a>
         <?php endforeach; ?>
     </div>
 
