@@ -32,13 +32,15 @@ $categories = $pdo->query('SELECT DISTINCT category FROM links ORDER BY category
         .muted { color: #666; font-size: 14px; }
         .card { border: 1px solid #ddd; border-radius: 8px; padding: 14px; margin: 12px 0; }
         label { display: block; margin-top: 8px; font-weight: 600; }
-        input[type="text"], input[type="url"], textarea, select { width: 100%; padding: 8px; margin-top: 4px; box-sizing: border-box; }
+        input[type="text"], input[type="url"], input[type="password"], textarea, select { width: 100%; padding: 8px; margin-top: 4px; box-sizing: border-box; }
         textarea { min-height: 100px; }
         button { margin-top: 12px; padding: 10px 14px; }
         .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
         .badge { display: inline-block; background: #eef; color: #224; border-radius: 999px; padding: 2px 10px; font-size: 12px; }
         .topbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
         .hidden { display: none; }
+        .actions { margin-top: 10px; }
+        .small { font-size: 13px; }
     </style>
 </head>
 <body>
@@ -75,16 +77,25 @@ $categories = $pdo->query('SELECT DISTINCT category FROM links ORDER BY category
                 </div>
             </div>
 
-            <label for="category">Kategorie</label>
-            <input id="category" name="category" type="text" required placeholder="např. střet zájmů, personální čistky, legislativní obcházení">
+            <label for="category_existing">Kategorie (preferuj existující štítek)</label>
+            <select id="category_existing" name="category_existing">
+                <option value="">-- vyber existující štítek --</option>
+                <?php foreach ($categories as $cat): ?>
+                    <option value="<?= htmlspecialchars((string)$cat) ?>"><?= htmlspecialchars((string)$cat) ?></option>
+                <?php endforeach; ?>
+            </select>
+
+            <label for="category_new">Nový štítek (jen pokud žádný existující není vhodný)</label>
+            <input id="category_new" name="category_new" type="text" placeholder="např. střet zájmů, personální čistky, legislativní obcházení">
 
             <label for="summary">Shrnutí</label>
             <textarea id="summary" name="summary" required placeholder="Krátké shrnutí: co se stalo, proč je to relevantní pro erozi právního státu."></textarea>
 
             <label for="secret">Tajemství</label>
-            <input id="secret" name="secret" type="password" required placeholder="Sdílené tajemství pro zápis">
+            <input id="secret" name="secret" type="password" required placeholder="Sdílené tajemství pro zápis i úpravu">
 
             <button type="submit">Přidat záznam</button>
+            <p class="muted small">Pokud vyplníš existující kategorii i nový štítek, použije se existující kategorie.</p>
         </form>
     </div>
 
@@ -100,12 +111,64 @@ $categories = $pdo->query('SELECT DISTINCT category FROM links ORDER BY category
         <p class="muted">Zatím žádné záznamy.</p>
     <?php else: ?>
         <?php foreach ($items as $item): ?>
-            <article class="card">
+            <article class="card" id="item-<?= (int)$item['id'] ?>">
                 <div class="muted"><?= htmlspecialchars((string)$item['created_at']) ?> · <?= htmlspecialchars((string)($item['source_type'] ?: 'neuvedeno')) ?></div>
                 <?php if (!empty($item['title'])): ?><h3><?= htmlspecialchars((string)$item['title']) ?></h3><?php endif; ?>
                 <div><a href="<?= htmlspecialchars((string)$item['url']) ?>" target="_blank" rel="noopener noreferrer"><?= htmlspecialchars((string)$item['url']) ?></a></div>
                 <p><span class="badge"><?= htmlspecialchars((string)$item['category']) ?></span></p>
                 <p><?= nl2br(htmlspecialchars((string)$item['summary'])) ?></p>
+
+                <div class="actions">
+                    <button type="button" onclick="toggleEditForm(<?= (int)$item['id'] ?>)">✏️ Upravit záznam</button>
+                </div>
+
+                <div class="card hidden" id="editForm-<?= (int)$item['id'] ?>">
+                    <form method="post" action="save.php">
+                        <input type="hidden" name="id" value="<?= (int)$item['id'] ?>">
+
+                        <label for="url-<?= (int)$item['id'] ?>">Odkaz</label>
+                        <input id="url-<?= (int)$item['id'] ?>" name="url" type="url" required value="<?= htmlspecialchars((string)$item['url']) ?>">
+
+                        <div class="row">
+                            <div>
+                                <label for="title-<?= (int)$item['id'] ?>">Titulek (volitelné)</label>
+                                <input id="title-<?= (int)$item['id'] ?>" name="title" type="text" value="<?= htmlspecialchars((string)$item['title']) ?>">
+                            </div>
+                            <div>
+                                <label for="source_type-<?= (int)$item['id'] ?>">Zdroj</label>
+                                <select id="source_type-<?= (int)$item['id'] ?>" name="source_type">
+                                    <option value="" <?= ($item['source_type'] ?? '') === '' ? 'selected' : '' ?>>-- vyber --</option>
+                                    <option value="web" <?= ($item['source_type'] ?? '') === 'web' ? 'selected' : '' ?>>web</option>
+                                    <option value="x" <?= ($item['source_type'] ?? '') === 'x' ? 'selected' : '' ?>>X/Twitter</option>
+                                    <option value="facebook" <?= ($item['source_type'] ?? '') === 'facebook' ? 'selected' : '' ?>>Facebook</option>
+                                    <option value="youtube" <?= ($item['source_type'] ?? '') === 'youtube' ? 'selected' : '' ?>>YouTube</option>
+                                    <option value="tiktok" <?= ($item['source_type'] ?? '') === 'tiktok' ? 'selected' : '' ?>>TikTok</option>
+                                    <option value="other" <?= ($item['source_type'] ?? '') === 'other' ? 'selected' : '' ?>>jiné</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <label for="category_existing-<?= (int)$item['id'] ?>">Kategorie (preferuj existující štítek)</label>
+                        <select id="category_existing-<?= (int)$item['id'] ?>" name="category_existing">
+                            <option value="">-- vyber existující štítek --</option>
+                            <?php foreach ($categories as $cat): ?>
+                                <option value="<?= htmlspecialchars((string)$cat) ?>" <?= ((string)$item['category'] === (string)$cat) ? 'selected' : '' ?>><?= htmlspecialchars((string)$cat) ?></option>
+                            <?php endforeach; ?>
+                        </select>
+
+                        <label for="category_new-<?= (int)$item['id'] ?>">Nový štítek (jen pokud žádný existující není vhodný)</label>
+                        <input id="category_new-<?= (int)$item['id'] ?>" name="category_new" type="text" placeholder="nový štítek (volitelné)">
+
+                        <label for="summary-<?= (int)$item['id'] ?>">Shrnutí</label>
+                        <textarea id="summary-<?= (int)$item['id'] ?>" name="summary" required><?= htmlspecialchars((string)$item['summary']) ?></textarea>
+
+                        <label for="secret-<?= (int)$item['id'] ?>">Tajemství</label>
+                        <input id="secret-<?= (int)$item['id'] ?>" name="secret" type="password" required placeholder="Stejné tajemství jako pro přidání">
+
+                        <button type="submit">Uložit změny</button>
+                        <p class="muted small">Pokud vyplníš existující kategorii i nový štítek, použije se existující kategorie.</p>
+                    </form>
+                </div>
             </article>
         <?php endforeach; ?>
     <?php endif; ?>
@@ -123,6 +186,12 @@ $categories = $pdo->query('SELECT DISTINCT category FROM links ORDER BY category
                 card.classList.add('hidden');
                 btn.textContent = '➕ Přidat nový záznam';
             }
+        }
+
+        function toggleEditForm(id) {
+            const form = document.getElementById('editForm-' + id);
+            if (!form) return;
+            form.classList.toggle('hidden');
         }
     </script>
 </body>
