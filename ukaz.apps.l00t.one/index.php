@@ -77,8 +77,11 @@ function nowIso(): string
 
 function absoluteUrl(array $params): string
 {
-    $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+    $forwardedProto = strtolower((string)($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? ''));
     $host = $_SERVER['HTTP_HOST'] ?? APP_DNS;
+    $scheme = $forwardedProto !== ''
+        ? strtok($forwardedProto, ',')
+        : ((!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || !str_starts_with($host, '127.0.0.1') ? 'https' : 'http');
     $path = strtok($_SERVER['REQUEST_URI'] ?? '/', '?') ?: '/';
     return $scheme . '://' . $host . $path . '?' . http_build_query($params);
 }
