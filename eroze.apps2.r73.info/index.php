@@ -65,36 +65,13 @@ $categories = array_keys($categoryCounts);
         }
         .record-card { position: relative; padding-right: 52px; }
         .card-edit-btn { position: absolute; top: 10px; right: 10px; }
-        .admin-bar { background: #fdf6e3; border: 1px solid #ccc; border-radius: 8px; padding: 10px 14px; margin: 12px 0; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-        .admin-bar.hidden { display: none; }
-        .admin-bar input[type="password"] { width: 200px; padding: 6px 8px; }
-        .admin-bar button { padding: 6px 12px; margin: 0; }
-        .btn-small { padding: 4px 10px; font-size: 12px; border: 1px solid #ccc; border-radius: 6px; background: #fff; cursor: pointer; text-decoration: none; color: #000; }
-        .btn-small:hover { background: #eee; }
-        .btn-danger { border-color: #c22; color: #c22; }
-        .btn-danger:hover { background: #fdeaea; }
-        .record-actions { margin-top: 8px; display: flex; gap: 6px; }
-        .admin-only { display: none; }
-        .admin-visible .admin-only { display: inline-block; }
     </style>
 </head>
 <body>
     <div class="titlebar">
         <h1>Eroze právního státu</h1>
-        <div style="display:flex;gap:6px;">
-            <button type="button" class="icon-btn" id="adminLoginBtn" onclick="toggleAdmin()" aria-label="Admin přihlášení" title="Admin přihlášení">🔑</button>
-            <button type="button" class="icon-btn" id="toggleFormBtn" onclick="toggleAddForm()" aria-label="Přidat nový záznam" title="Přidat nový záznam">➕</button>
-        </div>
+        <button type="button" class="icon-btn" id="toggleFormBtn" onclick="toggleAddForm()" aria-label="Přidat nový záznam" title="Přidat nový záznam">➕</button>
     </div>
-
-    <div class="admin-bar hidden" id="adminBar">
-        <label for="adminPasskey">Passkey:</label>
-        <input type="password" id="adminPasskey" placeholder="Admin passkey" onkeydown="if(event.key==='Enter')adminLogin()">
-        <button type="button" onclick="adminLogin()">🔓 Přihlásit</button>
-        <span id="adminStatus"></span>
-        <button type="button" class="btn-small" id="adminLogoutBtn" onclick="adminLogout()" style="display:none;">🚪 Odhlásit</button>
-    </div>
-
     <p class="muted">Databáze odkazů + ručně/AI vytvořená shrnutí + kategorie.</p>
     <p>
         Tahle stránka slouží jako průběžný archiv případů, které mohou souviset s oslabováním pravidel právního státu.
@@ -166,10 +143,6 @@ $categories = array_keys($categoryCounts);
                 <div><a href="<?= htmlspecialchars((string)$item['url']) ?>" target="_blank" rel="noopener noreferrer"><?= htmlspecialchars((string)$item['url']) ?></a></div>
                 <p><span class="badge"><?= htmlspecialchars((string)$item['category']) ?></span></p>
                 <p><?= nl2br(htmlspecialchars((string)$item['summary'])) ?></p>
-                <div class="record-actions">
-                    <a href="track.php?id=<?= (int)$item['id'] ?>" class="btn-small">🔍 Sledovat</a>
-                    <button type="button" class="btn-small btn-danger admin-only" onclick="adminDelete(<?= (int)$item['id'] ?>)">🗑 Smazat</button>
-                </div>
 
                 <div class="card hidden" id="editForm-<?= (int)$item['id'] ?>">
                     <form method="post" action="save.php">
@@ -223,8 +196,6 @@ $categories = array_keys($categoryCounts);
     <?php endif; ?>
 
     <script>
-        let adminPasskey = '';
-
         function toggleAddForm() {
             const card = document.getElementById('addFormCard');
             const btn = document.getElementById('toggleFormBtn');
@@ -247,95 +218,6 @@ $categories = array_keys($categoryCounts);
             const form = document.getElementById('editForm-' + id);
             if (!form) return;
             form.classList.toggle('hidden');
-        }
-
-        function toggleAdmin() {
-            const bar = document.getElementById('adminBar');
-            bar.classList.toggle('hidden');
-            if (!bar.classList.contains('hidden')) {
-                document.getElementById('adminPasskey').focus();
-            }
-        }
-
-        function adminLogin() {
-            const passkey = document.getElementById('adminPasskey').value;
-            const status = document.getElementById('adminStatus');
-            if (!passkey) {
-                status.textContent = '⚠️ Zadej passkey';
-                return;
-            }
-
-            const formData = new URLSearchParams();
-            formData.set('passkey', passkey);
-
-            status.textContent = '⏳ Ověřuji...';
-
-            fetch('admin_verify.php', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: formData.toString(),
-            })
-            .then(res => {
-                if (!res.ok) throw new Error('Neplatný passkey');
-                return res.json();
-            })
-            .then(data => {
-                if (data.ok) {
-                    adminPasskey = passkey;
-                    status.textContent = '✅ Přihlášen jako admin';
-                    status.style.color = '#2a2';
-                    document.getElementById('adminLoginBtn').textContent = '🔓';
-                    document.getElementById('adminLogoutBtn').style.display = 'inline-block';
-                    document.querySelectorAll('.admin-only').forEach(el => el.classList.add('admin-visible'));
-                    document.querySelectorAll('.record-card').forEach(el => el.classList.add('admin-visible'));
-                }
-            })
-            .catch(err => {
-                status.textContent = '❌ ' + err.message;
-                status.style.color = '#c22';
-                adminPasskey = '';
-            });
-        }
-
-        function adminLogout() {
-            adminPasskey = '';
-            document.getElementById('adminPasskey').value = '';
-            document.getElementById('adminStatus').textContent = '';
-            document.getElementById('adminLoginBtn').textContent = '🔑';
-            document.getElementById('adminLogoutBtn').style.display = 'none';
-            document.querySelectorAll('.admin-only').forEach(el => el.classList.remove('admin-visible'));
-            document.querySelectorAll('.record-card').forEach(el => el.classList.remove('admin-visible'));
-        }
-
-        function adminDelete(id) {
-            if (!adminPasskey) {
-                alert('Nejprve se přihlas jako admin.');
-                return;
-            }
-            if (!confirm('Opravdu smazat záznam #' + id + '?')) return;
-
-            const formData = new URLSearchParams();
-            formData.set('id', String(id));
-            formData.set('secret', adminPasskey);
-
-            fetch('admin_delete.php', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: formData.toString(),
-            })
-            .then(res => {
-                if (!res.ok) throw new Error('Smazání selhalo');
-                return res.json();
-            })
-            .then(data => {
-                if (data.ok) {
-                    const el = document.getElementById('item-' + id);
-                    if (el) el.remove();
-                }
-            })
-            .catch(err => {
-                alert('Chyba: ' + err.message);
-            });
         }
     </script>
 </body>
